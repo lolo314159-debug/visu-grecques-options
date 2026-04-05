@@ -82,12 +82,24 @@ with tab_gamma:
         
         st.markdown("""> **Note :** Le Gamma est maximal lorsque l'option est "At-the-money" (proche du prix actuel) et que l'échéance approche.""")
 
-# --- ONGLET 2 : ANALYSE IA ---
-with tab_analysis:
-    st.header("Analyse prédictive via Gemini")
-    prompt = st.text_area("Posez une question sur ces données :", 
-                         value=f"Analyse l'impact d'une hausse de la volatilité sur le Gamma de {ticker_input} à court terme.")
-    
-    if st.button("Lancer l'analyse IA"):
-        st.write("*(Note: Connectez votre API Key Gemini pour activer cette section)*")
-        # Ici on intégrerait : model.generate_content(prompt)
+import streamlit as st
+import google.generativeai as genai
+
+# Récupération sécurisée de la clé depuis les Secrets
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    model = genai.GenerativeModel('gemini-pro')
+    # On stocke dans la session pour savoir si l'IA est prête
+    ia_disponible = True
+except Exception as e:
+    st.error("Clé API Gemini non configurée dans les Secrets.")
+    ia_disponible = False
+
+# Exemple d'utilisation dans ton onglet Analyse
+if ia_disponible:
+    if st.button("Demander l'analyse à Gemini"):
+        with st.spinner("L'IA analyse la surface du Gamma..."):
+            # On passe les données du contexte à l'IA
+            contexte = f"Le ticker est {ticker_input}. Le prix est de {current_price}."
+            response = model.generate_content(f"{contexte}. Question: {prompt}")
+            st.markdown(response.text)
