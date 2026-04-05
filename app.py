@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import google.generativeai as genai
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="OptiVisualizer Pro", layout="wide")
+st.set_page_config(page_title="OptiVisualizer White Edition", layout="wide")
 
 # --- MOTEUR DE CALCUL (BLACK-SCHOLES) ---
 def bs_price(S, K, T, r, sigma, option_type="call"):
@@ -49,10 +49,10 @@ with st.sidebar:
     market = get_market_data(ticker)
     s_curr = st.number_input("Prix Sous-jacent ($)", value=float(market['price']) if market else 150.0)
     vol_glob = st.slider("Volatilité (%)", 5, 150, int(market['vol']*100) if market else 25) / 100
-    rate = st.slider("Taux (%)", 0.0, 10.0, 3.7) / 100 # Taux US 2026 approx
+    rate = st.slider("Taux (%)", 0.0, 10.0, 3.7) / 100
 
 # --- TABS ---
-st.title(f"Terminal d'Analyse : {ticker}")
+st.title(f"Analyse des Options : {ticker}")
 tabs = st.tabs(["📉 Stratégies P&L", "🔺 Delta", "🧬 Gamma", "⏳ Theta", "🌊 Vega", "🤖 Analyse IA"])
 
 # --- STRATÉGIES P&L ---
@@ -82,27 +82,44 @@ with tabs[0]:
                 pnl_t += (np.array([bs_price(s, l['strike'], t_sim/365, rate, vol_glob, l['type']) for s in s_range]) * l['qty'] * l['side'])
             
             fig = go.Figure()
-            fig.add_hline(y=0, line_color="white")
-            fig.add_trace(go.Scatter(x=s_range, y=pnl_exp - total_cost, name="Échéance", line=dict(color='#00ffcc', width=3)))
-            fig.add_trace(go.Scatter(x=s_range, y=pnl_t - total_cost, name=f"T={t_sim}j", line=dict(color='#ff00ff', dash='dot')))
-            fig.update_layout(template="plotly_dark", height=500)
+            fig.add_hline(y=0, line_color="black", line_width=1)
+            fig.add_trace(go.Scatter(x=s_range, y=pnl_exp - total_cost, name="Échéance", line=dict(color='blue', width=3)))
+            fig.add_trace(go.Scatter(x=s_range, y=pnl_t - total_cost, name=f"T={t_sim}j", line=dict(color='red', dash='dot')))
+            fig.update_layout(template="plotly_white", height=500, title="Profil de Profit & Perte")
             st.plotly_chart(fig, use_container_width=True)
 
-# --- GRECQUES 3D (RETOUR AUX COULEURS D'ORIGINE) ---
-p_grid = np.linspace(s_curr * 0.8, s_curr * 1.2, 30)
-d_grid = np.linspace(1, 365, 30)
+# --- GRECQUES 3D (FOND BLANC + LIGNES DE NIVEAU) ---
+p_grid = np.linspace(s_curr * 0.8, s_curr * 1.2, 40)
+d_grid = np.linspace(1, 365, 40)
 P, D = np.meshgrid(p_grid, d_grid)
 
 def plot_3d(idx, title, label, colorscale):
     target_k = legs[0]['strike'] if legs else s_curr
-    # Note: On utilise le type de la première jambe ou Call par défaut
     t_opt = legs[0]['type'] if legs else "call"
     func = np.vectorize(lambda p, d: bs_greeks(p, target_k, d/365, rate, vol_glob, t_opt)[idx])
     Z = func(P, D)
-    fig = go.Figure(data=[go.Surface(z=Z, x=p_grid, y=d_grid, colorscale=colorscale)])
+    
+    # Configuration de la surface avec contours (Lignes de niveau)
+    fig = go.Figure(data=[go.Surface(
+        z=Z, x=p_grid, y=d_grid, 
+        colorscale=colorscale,
+        contours={
+            "z": {"show": True, "start": np.min(Z), "end": np.max(Z), "size": (np.max(Z)-np.min(Z))/15, "color": "white", "width": 2},
+            "x": {"show": True, "color": "rgba(255,255,255,0.3)"},
+            "y": {"show": True, "color": "rgba(255,255,255,0.3)"}
+        }
+    )])
+    
     fig.update_layout(
-        title=title, scene=dict(xaxis_title="Prix", yaxis_title="Jours", zaxis_title=label, yaxis_autorange="reversed"),
-        height=700, template="plotly_dark"
+        title=title, 
+        template="plotly_white", # Fond Blanc
+        scene=dict(
+            xaxis=dict(title="Prix", backgroundcolor="white", gridcolor="lightgray", showbackground=True),
+            yaxis=dict(title="Jours", backgroundcolor="white", gridcolor="lightgray", showbackground=True, autorange="reversed"),
+            zaxis=dict(title=label, backgroundcolor="white", gridcolor="lightgray", showbackground=True),
+        ),
+        height=750,
+        margin=dict(l=0, r=0, b=0, t=50)
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -118,6 +135,6 @@ with tabs[5]:
         try:
             genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
             model = genai.GenerativeModel('gemini-pro')
-            resp = model.generate_content(f"Analyse ce ticker {ticker} au prix {s_curr}. Volatilité {vol_glob*100}%.")
+            resp = model.generate_content(f"Analyse financière pour {ticker} à {s_curr}$.")
             st.info(resp.text)
-        except: st.error("Vérifiez votre clé API dans les secrets.")
+        except: st.error("Configurez la clé API Gemini dans les secrets.")
